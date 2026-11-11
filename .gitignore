@@ -1,0 +1,22 @@
+*.iml
+.gradle
+.kotlin/
+local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# Local tooling
+.superpowers/
+.omc/
+.claude/
+docs/superpowers/
+
+# Release assets (attached to GitHub Releases) and submission paperwork
+*.apk
+*.mp4
+*.docx
+~$*
