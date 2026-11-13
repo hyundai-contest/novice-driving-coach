@@ -1,6 +1,14 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Release signing comes from keystore.properties in the repo root (git-ignored). Without it the release build is unsigned.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -18,12 +26,23 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        if (!keystoreProps.isEmpty) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
-            }
+            // Shrinking is off: optimising only androidx/kotlin made the app crash at startup
+            // (IllegalAccessError between the renamed Kotlin classes and the untouched Pleos SDK).
+            optimization { enable = false }
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {

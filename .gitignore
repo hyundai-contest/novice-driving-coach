@@ -17,6 +17,11 @@ docs/superpowers/
 
 # Release assets (attached to GitHub Releases) and submission paperwork
 *.apk
+!apk/*.apk
 *.mp4
 *.docx
 ~$*
+
+# Release signing (keep the keystore and its passwords out of the repo)
+keystore.properties
+*.jks
