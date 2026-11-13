@@ -1,5 +1,5 @@
 ﻿<#
-  초보운전 코치 시연 스크립트
+  새싹운전 시연 스크립트
   Pleos Virtual Console(HTTP)과 에뮬레이터 GPS(adb emu geo fix)로 차량 신호를 주입합니다.
   신호는 실제 Vehicle SDK 경로로 앱에 들어갑니다.
 
@@ -137,18 +137,21 @@ try {
     Put 'body?door_fl=false'
 
     Step '시연 2-2  후진 주차: 빠른 후진("후진이 빨라요") → 덜 멈춘 채 전진 → 후진 → P단  →  "주차 완료. 기어를 3번 바꿨어요…"'
+    # 기어 신호는 속도 신호보다 늦게 도착할 수 있어, 변속과 속도 변경 사이에 여유를 둡니다.
     Put 'gear?gear=Reverse'
+    Start-Sleep -Seconds 2
     Geo $Office[0] $Office[1] 9
     Steer -200
     Start-Sleep -Seconds 4
     Geo $Office[0] $Office[1] 4
-    Start-Sleep -Seconds 1
+    Start-Sleep -Seconds 2
     Put 'gear?gear=Drive'          # 차가 아직 움직이는 중에 변속
+    Start-Sleep -Seconds 2
     Steer 200
-    Start-Sleep -Seconds 3
     Geo $Office[0] $Office[1] 0
-    Start-Sleep -Seconds 1
+    Start-Sleep -Seconds 3          # 이번에는 완전히 멈춘 뒤 변속
     Put 'gear?gear=Reverse'
+    Start-Sleep -Seconds 2
     Geo $Office[0] $Office[1] 4
     Steer -200
     Start-Sleep -Seconds 3
