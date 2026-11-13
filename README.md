@@ -9,7 +9,7 @@
 | 앱 이름 | 초보운전 코치 (패키지 `com.example.hyundai_contest`, 버전 1.0) |
 | 대상 | Pleos Connect(Android Automotive) 차량용 앱 |
 | APK | [Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)의 `초보운전코치-debug.apk` |
-| 시연 영상 | [Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)의 `demo-video-무음.mp4` (무음, 에뮬레이터 화면 녹화) |
+| 시연 영상 | [Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)의 `demo-video.mp4` (에뮬레이터 화면 녹화) |
 | 기획안 | [`docs/contest/접수양식-02-앱소개.md`](docs/contest/접수양식-02-앱소개.md) |
 | 문서 안내 | 설계 [`docs/design.md`](docs/design.md) · 시연 순서 [`demo/README.md`](demo/README.md) |
 
@@ -17,7 +17,7 @@
 
 - 받는 곳: **[GitHub Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)** 의 `초보운전코치-debug.apk` (디버그 서명, 약 57.5 MB)
 - APK와 영상은 저장소에 넣지 않습니다(`.gitignore`). 소스에서 빌드하면 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다.
-- SHA-256 (2026-11-13 빌드): `21148094e57c101ed9437349691be715e5a9bebcde2a9054ff2d07c5b45df98d`
+- SHA-256 (2026-11-13 빌드): `4b4cffa4c6f41de372f48c401bb025a0d8449419602a160911392bbfe5281bb0`
 - 서명: 안드로이드 디버그 키. 릴리스 서명 설정은 아직 없습니다.
 
 ## 실행 방법
@@ -80,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File demo\demo.ps1 -Auto  # 끝까지 자동
 - 차량 속도 권한이 없으면 GPS 속도로 대신합니다. 위치 권한이 없으면 "자주 놓치는 곳"이 비어 있습니다. 위치 "항상 허용"이 있어야 앱을 열지 않은 부팅 자동 시작에서도 위치를 받습니다.
 - 에뮬레이터를 재부팅하면 `adb forward`를 다시 설정합니다.
 - **시연 스크립트를 돌리는 동안에는 Virtual Console 브라우저 탭을 닫습니다.** 열려 있으면 콘솔 페이지의 주행 시뮬레이션이 스크립트가 넣은 속도를 덮어씁니다.
-- 에뮬레이터의 Pleos 온디바이스 TTS는 오류를 내서, 앱이 안드로이드 기본 TTS로 자동 전환합니다.
+- 에뮬레이터에서도 Pleos 온디바이스 TTS로 음성이 나옵니다(PC 스피커). 로캘은 국가까지 넣은 `ko_KR`로 지정해야 합니다. 언어만 넣은 `ko`는 엔진이 "unsupported locale"로 거부합니다. 말한 문장은 `adb logcat -s Coach`의 `announce:` 줄로도 확인할 수 있습니다.
 - 에뮬레이터에서만 다른 점: 조향각 부호가 콘솔 입력과 반대라 앱이 뒤집어 읽고(`STEERING_SIGN`), 콘솔에 운전석 벨트 조작이 없어 벨트는 SDK 수신만 확인했습니다. 후진 기어에서는 차량 기본 후방 카메라가 앱 화면을 덮습니다.
 - 검증은 에뮬레이터 기준입니다. 감지 기준값(회전 조향각 90° 등)은 실차 주행 로그로 보정이 필요합니다.
 
@@ -153,10 +153,3 @@ SDK 호출은 `signal/PleosSignalSource.kt`와 `signal/Announcer.kt` 안에만 �
 
 - `demo/demo.ps1`: PC에서 Virtual Console(HTTP)과 에뮬레이터 GPS로 차량 신호를 넣습니다. 신호가 실제 SDK 경로로 들어오므로 시연에서 도는 감지 코드는 실차와 같습니다. 출발 → 깜빡이 없이 빠른 우회전 → 깜빡이 켜고 좌회전 → 깜빡이 켜둔 채 직진 → 상향등 켜둔 채 주행 → D단에서 문 열기 → 후진 주차 → 창문 연 채 하차 순서입니다.
 - 12주 데모 기록(`demo/SyntheticHistory.kt`): 시연 패널에서 불러오는 결정적 합성 데이터입니다. 성장 기록과 자주 놓치는 곳 화면을 채우는 용도이고, 불러오면 기존 기록을 모두 지웁니다. 성장 기록 화면의 12주 추이는 이 합성 데이터입니다.
-
-## 릴리스 서명
-
-릴리스 서명 설정은 아직 없습니다. 제출 APK는 안드로이드 디버그 키로 서명한 디버그 빌드(`./gradlew :app:assembleDebug`)입니다.
-
-- 디버그 키는 PC마다 다릅니다. 다른 PC에서 빌드한 APK는 이미 설치된 앱 위에 업데이트로 설치되지 않으므로, 먼저 지우고 설치합니다(`adb uninstall com.example.hyundai_contest`).
-- 마켓 배포 전에는 전용 키스토어와 `signingConfigs` 설정을 추가해야 합니다.
