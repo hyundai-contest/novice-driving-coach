@@ -1,4 +1,4 @@
-# 초보운전 코치
+# 새싹운전
 
 > **연수가 끝나 혼자 운전하는 초보에게, 차가 직접 조작을 보고 그 순간 알려주는 Pleos Connect 운전 코치 앱.**
 
@@ -6,19 +6,20 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 앱 이름 | 초보운전 코치 (패키지 `com.example.hyundai_contest`, 버전 1.0) |
+| 앱 이름 | 새싹운전 (패키지 `com.example.hyundai_contest`, 버전 1.0) |
 | 대상 | Pleos Connect(Android Automotive) 차량용 앱 |
-| APK | [Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)의 `초보운전코치-debug.apk` |
-| 시연 영상 | [Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)의 `demo-video.mp4` (에뮬레이터 화면 녹화) |
+| APK | [`apk/성원이와아이들_새싹운전_release.apk`](apk/성원이와아이들_새싹운전_release.apk) |
+| 시연 영상 | [Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)의 `novice-driving-coach-demo.mp4` (에뮬레이터 화면 녹화) |
 | 기획안 | [`docs/contest/접수양식-02-앱소개.md`](docs/contest/접수양식-02-앱소개.md) |
 | 문서 안내 | 설계 [`docs/design.md`](docs/design.md) · 시연 순서 [`demo/README.md`](demo/README.md) |
 
 ## APK 파일 위치
 
-- 받는 곳: **[GitHub Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)** 의 `초보운전코치-debug.apk` (디버그 서명, 약 57.5 MB)
-- APK와 영상은 저장소에 넣지 않습니다(`.gitignore`). 소스에서 빌드하면 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다.
-- SHA-256 (2026-11-13 빌드): `4b4cffa4c6f41de372f48c401bb025a0d8449419602a160911392bbfe5281bb0`
-- 서명: 안드로이드 디버그 키. 릴리스 서명 설정은 아직 없습니다.
+- 저장소 안: **`apk/성원이와아이들_새싹운전_release.apk`** (서명된 릴리스 빌드, 약 41 MB)
+- 바로 받기: https://github.com/hyundai-contest/novice-driving-coach/blob/main/apk/성원이와아이들_새싹운전_release.apk
+- SHA-256: `a80d77d52ca4a15540cd05100d42aab0a49bc6b3e419524b80b28516a2de19fa`
+- 서명 인증서: `CN=Saessak Driving, C=KR`
+- 시연 영상은 용량이 커서 [GitHub Releases](https://github.com/hyundai-contest/novice-driving-coach/releases)에 있습니다.
 
 ## 실행 방법
 
@@ -28,13 +29,13 @@
 2. APK를 설치합니다.
 
    ```bash
-   adb install -r 초보운전코치-debug.apk
+   adb install -r apk/성원이와아이들_새싹운전_release.apk
    ```
 
-3. 앱 목록에서 **초보운전 코치**를 실행하고, 권한 창에서 위치와 차량 속도를 허용합니다.
+3. 앱 목록에서 **새싹운전**을 실행하고, 권한 창에서 위치와 차량 속도를 허용합니다.
 4. 이후에는 앱을 열 필요가 없습니다. 시동(부팅)과 함께 코칭 서비스가 돌고, 기어가 P에서 벗어나면 주행 기록이 시작됩니다. 설치 직후나 강제 종료 뒤에는 앱을 한 번 열어야 자동 시작이 동작합니다(안드로이드 규칙).
 
-기록이 없는 상태에서 화면을 채워 보려면 제목 **"초보운전 코치"를 길게 눌러** 시연 패널을 열고 **12주 데모 기록 불러오기**를 누릅니다.
+기록이 없는 상태에서 화면을 채워 보려면 제목 **"새싹운전"을 길게 눌러** 시연 패널을 열고 **12주 데모 기록 불러오기**를 누릅니다.
 
 ### 2) 소스에서 빌드해 실행 (시연 패널·시연 스크립트 포함)
 
@@ -42,7 +43,8 @@
 
 ```bash
 ./gradlew :app:testDebugUnitTest      # 단위 테스트 (69개)
-./gradlew :app:installDebug           # 에뮬레이터에 설치
+./gradlew :app:installDebug           # 디버그 빌드를 에뮬레이터에 설치
+./gradlew :app:assembleRelease        # 서명된 릴리스 APK (keystore.properties 필요. 없으면 서명 없이 빌드)
 ```
 
 ```bash
