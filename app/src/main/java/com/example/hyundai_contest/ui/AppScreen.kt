@@ -85,7 +85,7 @@ fun AppScreen(app: CoachApp) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    "초보운전 코치",
+                    "새싹운전",
                     Modifier.combinedClickable(onClick = {}, onLongClick = { demoPanel = true }).padding(vertical = 16.dp),
                     fontSize = Type.title, fontWeight = FontWeight.Bold, color = Ink.primary,
                 )

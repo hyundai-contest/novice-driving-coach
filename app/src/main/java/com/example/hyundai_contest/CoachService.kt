@@ -24,7 +24,7 @@ class CoachService : Service() {
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "주행 코칭", NotificationManager.IMPORTANCE_LOW))
         val notification = Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("초보운전 코치")
+            .setContentTitle("새싹운전")
             .setContentText("주행을 지켜보고 있어요")
             .setOngoing(true)
             .build()
