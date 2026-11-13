@@ -38,7 +38,8 @@ class Announcer(private val context: Context) {
             tts.initialize(object : OnInitializeListener {
                 override fun onSuccess() {
                     tts.addEventListener(events)
-                    tts.setLocale(Locale.KOREAN)
+                    // Country included: the on-device engine rejects the language-only "ko" as "unsupported locale: ko-".
+                    tts.setLocale(Locale.KOREA)
                     pleosReady = true
                     pending?.let { pending = null; say(it) }
                 }
