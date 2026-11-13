@@ -56,8 +56,10 @@ class DetectionEngineTurnTest {
         assertTrue(records(ev).isEmpty())
     }
 
-    @Test fun turnAboveSpeedIgnored() {
-        assertTrue(records(drive(parked, *turn(-120f, kph = 60f))).isEmpty())
+    @Test fun turnAtHighSpeedIsJudgedAndFlaggedFast() {
+        val r = records(drive(parked, *turn(-120f, kph = 60f)))
+        assertEquals(listOf(RecordType.TURN_NO_SIGNAL, RecordType.TURN_FAST), r.map { it.record.type })
+        assertEquals("60", r[1].record.detail["kph"])
     }
 
     @Test fun turnWithUnknownSpeedIsJudged() {

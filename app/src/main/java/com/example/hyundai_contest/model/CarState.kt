@@ -15,6 +15,9 @@ data class CarState(
     val windowsOpenPct: Map<Seat, Int> = emptyMap(),
     val headlampOn: Boolean = false,
     val headlampAuto: Boolean? = null,
+    val highBeamOn: Boolean = false,
+    /** Driver belt. Null also when the sensor has never been seen to change (see PleosSignalSource). */
+    val beltBuckled: Boolean? = null,
     val lat: Double? = null,
     val lng: Double? = null,
 )

@@ -94,7 +94,7 @@ fun RecordRow(r: StoredRecord, showDate: Boolean = true) {
  * Trips are stepped through with two buttons; scrolling a long list is not a parked-car gesture.
  */
 @Composable
-fun TripsScreen(trips: List<TripRow>, records: List<StoredRecord>, onSpeak: (String) -> Unit) {
+fun TripsScreen(trips: List<TripRow>, records: List<StoredRecord>) {
     val byTrip = remember(records) { records.groupBy { it.tripId } }
     var index by remember(trips.size) { mutableStateOf(trips.lastIndex) }
     val trip = trips.getOrNull(index)
@@ -121,13 +121,11 @@ fun TripsScreen(trips: List<TripRow>, records: List<StoredRecord>, onSpeak: (Str
         }
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.weight(1.25f).fillMaxHeight()) {
+            Column(Modifier.weight(1f).fillMaxHeight()) {
                 Column(Modifier.fillMaxWidth().background(Ink.raised, CARD).padding(20.dp)) {
                     Text("다음 주행에서 해볼 것", color = Ink.muted, fontSize = Type.caption)
                     Spacer(Modifier.height(6.dp))
                     Text(tip, color = Ink.primary, fontSize = Type.title, fontWeight = FontWeight.SemiBold, lineHeight = Type.title * 1.35f)
-                    Spacer(Modifier.height(14.dp))
-                    BigButton("▶ 음성으로 듣기") { onSpeak(tip) }
                 }
                 Spacer(Modifier.height(16.dp))
                 Column(Modifier.fillMaxWidth().background(Ink.raised, CARD).padding(horizontal = 20.dp, vertical = 12.dp)) {
@@ -143,7 +141,8 @@ fun TripsScreen(trips: List<TripRow>, records: List<StoredRecord>, onSpeak: (Str
                     items(details, key = { it.seq }) { RecordRow(it, showDate = false); HorizontalDivider(color = Ink.line) }
                 }
             }
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // Top row: on the road. Bottom row: parking and getting in and out.
+            Column(Modifier.weight(1.3f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     StatTile(
                         "깜빡이", if (summary.turns == 0) "-" else "${summary.signaled}/${summary.turns}",
@@ -151,14 +150,33 @@ fun TripsScreen(trips: List<TripRow>, records: List<StoredRecord>, onSpeak: (Str
                         summary.missed + summary.late > 0, Modifier.weight(1f),
                     )
                     StatTile(
-                        "후진 주차", summary.parkShifts.lastOrNull()?.let { "${it}번" } ?: "-",
-                        if (summary.parkShifts.isEmpty()) "주차 없음" else "기어를 바꾼 횟수", false, Modifier.weight(1f),
+                        "회전 속도", if (summary.turns == 0) "-" else if (summary.fastTurns == 0) "✓" else "${summary.fastTurns}번",
+                        if (summary.turns == 0) "회전 없음" else if (summary.fastTurns == 0) "모두 천천히 돌았어요" else "빠르게 돌았어요",
+                        summary.fastTurns > 0, Modifier.weight(1f),
+                    )
+                    val leftOn = summary.leftOn + summary.highBeam
+                    StatTile(
+                        "켜둔 채 주행", "${leftOn}번",
+                        if (leftOn == 0) "없었어요" else listOfNotNull(
+                            "깜빡이 ${summary.leftOn}".takeIf { summary.leftOn > 0 }, "상향등 ${summary.highBeam}".takeIf { summary.highBeam > 0 },
+                        ).joinToString(" · "),
+                        leftOn > 0, Modifier.weight(1f),
                     )
                 }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatTile("깜빡이 켜둔 채 주행", "${summary.leftOn}번", if (summary.leftOn == 0) "없었어요" else "차선 변경 뒤 확인", summary.leftOn > 0, Modifier.weight(1f))
-                    val exit = summary.leftOpen + summary.notParked
-                    StatTile("하차 체크", if (exit == 0) "✓" else "${exit}건", if (exit == 0) "이상 없음" else "기어·창문 확인", exit > 0, Modifier.weight(1f))
+                    val parked = summary.parkShifts.isNotEmpty()
+                    StatTile(
+                        "후진 주차", summary.parkShifts.lastOrNull()?.let { "${it}번" } ?: "-",
+                        if (!parked) "주차 없음" else if (summary.rollingShifts > 0) "덜 멈춘 변속 ${summary.rollingShifts}번" else "기어를 바꾼 횟수",
+                        summary.rollingShifts > 0, Modifier.weight(1f),
+                    )
+                    StatTile(
+                        "후진 속도", if (summary.fastReverse > 0) "${summary.fastReverse}번" else "✓",
+                        if (summary.fastReverse > 0) "빠르게 후진했어요" else "빠른 후진 없음",
+                        summary.fastReverse > 0, Modifier.weight(1f),
+                    )
+                    val check = summary.departUnready + summary.leftOpen + summary.notParked
+                    StatTile("출발·하차 체크", if (check == 0) "✓" else "${check}건", if (check == 0) "이상 없음" else "벨트·기어·창문 확인", check > 0, Modifier.weight(1f))
                 }
             }
         }
@@ -169,11 +187,11 @@ fun TripsScreen(trips: List<TripRow>, records: List<StoredRecord>, onSpeak: (Str
 @Composable
 fun StatTile(label: String, value: String, note: String, attention: Boolean, modifier: Modifier) {
     Column(
-        modifier.fillMaxHeight().background(Ink.raised, CARD).padding(20.dp),
+        modifier.fillMaxHeight().background(Ink.raised, CARD).padding(16.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(label, color = Ink.secondary, fontSize = Type.body)
-        Text(value, color = if (attention) Ink.record else Ink.primary, fontSize = Type.display * 1.4f, fontWeight = FontWeight.Bold)
+        Text(label, color = Ink.secondary, fontSize = Type.body, maxLines = 1)
+        Text(value, color = if (attention) Ink.record else Ink.primary, fontSize = Type.display * 1.4f, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(note, color = if (attention) Ink.primary else Ink.muted, fontSize = Type.caption)
     }
 }
@@ -224,15 +242,18 @@ private val METRICS = listOf(
     Metric("주차 한 번에 기어 변경", "번", 1, setOf(RecordType.PARKING)) { week ->
         Coach.summarize(week.map { it.record }).parkShifts.takeIf { it.isNotEmpty() }?.average()?.toFloat()
     },
-    Metric("깜빡이 켜둔 채 주행", "건", 0, setOf(RecordType.SIGNAL_LEFT_ON)) { week ->
-        week.count { it.record.type == RecordType.SIGNAL_LEFT_ON }.toFloat()
+    countMetric("깜빡이·상향등 켜둔 채", RecordType.SIGNAL_LEFT_ON, RecordType.HIGH_BEAM_LEFT_ON),
+    countMetric("빠른 회전·후진", RecordType.TURN_FAST, RecordType.REVERSE_FAST),
+    Metric("덜 멈춘 채 변속", "건", 0, setOf(RecordType.PARKING)) { week ->
+        Coach.summarize(week.map { it.record }).rollingShifts.toFloat()
     },
-    Metric("하차 때 놓친 것", "건", 0, setOf(RecordType.LEFT_OPEN_ON_EXIT, RecordType.EXIT_NOT_PARKED)) { week ->
-        week.count { it.record.type == RecordType.LEFT_OPEN_ON_EXIT || it.record.type == RecordType.EXIT_NOT_PARKED }.toFloat()
-    },
+    countMetric("출발·하차 때 놓친 것", RecordType.DEPART_UNREADY, RecordType.LEFT_OPEN_ON_EXIT, RecordType.EXIT_NOT_PARKED),
 )
 
-/** Four small multiples, 12 weekly bars each: the driver against their own past, never against other drivers. */
+private fun countMetric(title: String, vararg types: RecordType) =
+    Metric(title, "건", 0, types.toSet()) { week -> week.count { it.record.type in types }.toFloat() }
+
+/** Six small multiples, 12 weekly bars each: the driver against their own past, never against other drivers. */
 @Composable
 fun GrowthScreen(records: List<StoredRecord>, unsupported: Set<Domain>, nowMs: Long) {
     val weeks = 12
@@ -243,7 +264,7 @@ fun GrowthScreen(records: List<StoredRecord>, unsupported: Set<Domain>, nowMs: L
         }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        METRICS.chunked(2).forEach { row ->
+        METRICS.chunked(3).forEach { row ->
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 row.forEach { m ->
                     val missing = m.types.any { t -> Labels.needs(t).any { it in unsupported } }
@@ -266,25 +287,21 @@ fun WeeklyBars(title: String, values: List<Float?>, unit: String, decimals: Int,
     val measurer = rememberTextMeasurer()
     var picked by remember { mutableStateOf<Int?>(null) }
     Column(modifier.background(Ink.raised, CARD).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                SectionTitle(title)
-                val i = picked
-                Text(
-                    if (i == null) "막대를 누르면 그 주를 볼 수 있어요"
-                    else (values.size - 1 - i).let { ago -> if (ago == 0) "이번 주" else "${ago}주 전" } +
-                        " · " + (values[i]?.let { fmt(it, decimals) + unit } ?: "기록 없음"),
-                    color = Ink.muted, fontSize = Type.caption,
-                )
-            }
-            val known = values.filterNotNull()
-            if (known.size >= 2) {
-                Text(
-                    "${fmt(known.first(), decimals)} → ${fmt(known.last(), decimals)}$unit",
-                    color = Ink.primary, fontSize = Type.title * 1.2f, fontWeight = FontWeight.Bold,
-                )
-            }
+        SectionTitle(title)
+        val known = values.filterNotNull()
+        if (known.size >= 2) {
+            Text(
+                "${fmt(known.first(), decimals)} → ${fmt(known.last(), decimals)}$unit",
+                color = Ink.primary, fontSize = Type.title * 1.2f, fontWeight = FontWeight.Bold, maxLines = 1,
+            )
         }
+        val i = picked
+        Text(
+            if (i == null) "막대를 누르면 그 주를 볼 수 있어요"
+            else (values.size - 1 - i).let { ago -> if (ago == 0) "이번 주" else "${ago}주 전" } +
+                " · " + (values[i]?.let { fmt(it, decimals) + unit } ?: "기록 없음"),
+            color = Ink.muted, fontSize = Type.caption, maxLines = 1,
+        )
         if (notMeasurable) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("이 차량에서 측정할 수 없음", color = Ink.muted, fontSize = Type.body)
@@ -317,6 +334,8 @@ fun WeeklyBars(title: String, values: List<Float?>, unit: String, decimals: Int,
                         cornerRadius = CornerRadius(4.dp.toPx()),
                     )
                 }
+                // Three charts share the width: a number on every bar would collide, so only the ends and the picked week get one.
+                if (i != values.indexOfFirst { it != null } && i != values.indexOfLast { it != null } && i != picked) return@forEachIndexed
                 val t = measurer.measure(fmt(v, decimals), label)
                 drawText(t, topLeft = Offset(i * slot + (slot - t.size.width) / 2, base - h - t.size.height - 2.dp.toPx()))
             }
@@ -378,21 +397,23 @@ fun PlacesScreen(trips: List<TripRow>, records: List<StoredRecord>) {
                     drawPath(line, Ink.series.copy(alpha = 0.18f), style = Stroke(width = 3.dp.toPx()))
                 }
                 val maxN = groups.maxOfOrNull { it.recs.size } ?: 1
+                // Never smaller than a fingertip: the pin is the tap target.
+                fun radius(g: PlaceGroup) = 16.dp.toPx() + 26.dp.toPx() * sqrt(g.recs.size.toFloat() / maxN)
                 groups.forEach { g ->
                     val c = p.at(g.lat, g.lng)
-                    // Never smaller than a fingertip: the pin is the tap target.
-                    val r = 16.dp.toPx() + 26.dp.toPx() * sqrt(g.recs.size.toFloat() / maxN)
+                    val r = radius(g)
                     if (g.key == selected) drawCircle(Ink.primary, radius = r + 4.dp.toPx(), center = c)
                     drawCircle(Ink.record, radius = r, center = c)
                     val n = measurer.measure(g.recs.size.toString(), TextStyle(color = Color.White, fontSize = Type.caption, fontWeight = FontWeight.Bold))
                     drawText(n, topLeft = Offset(c.x - n.size.width / 2, c.y - n.size.height / 2))
-                    if (g.named) {
-                        val t = measurer.measure(g.key, TextStyle(color = Ink.primary, fontSize = Type.body, fontWeight = FontWeight.SemiBold))
-                        val right = c.x + r + 8.dp.toPx()
-                        // Flip the label to the left of the pin when it would run off the map.
-                        val x = if (right + t.size.width > size.width) c.x - r - 8.dp.toPx() - t.size.width else right
-                        drawText(t, topLeft = Offset(x, (c.y - t.size.height / 2).coerceIn(0f, size.height - t.size.height)))
-                    }
+                }
+                // Names go on in a second pass, under their pin, so a neighbouring pin never covers one.
+                groups.filter { it.named }.forEach { g ->
+                    val c = p.at(g.lat, g.lng)
+                    val t = measurer.measure(g.key, TextStyle(color = Ink.primary, fontSize = Type.body, fontWeight = FontWeight.SemiBold))
+                    val below = c.y + radius(g) + 6.dp.toPx()
+                    val y = if (below + t.size.height > size.height) c.y - radius(g) - 6.dp.toPx() - t.size.height else below
+                    drawText(t, topLeft = Offset((c.x - t.size.width / 2).coerceIn(0f, size.width - t.size.width), y))
                 }
             }
         }

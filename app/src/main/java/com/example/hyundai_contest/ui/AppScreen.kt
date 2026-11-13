@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.hyundai_contest.CoachApp
+import com.example.hyundai_contest.coach.Coach
 import com.example.hyundai_contest.detect.Announcements
 import com.example.hyundai_contest.model.CarState
 import com.example.hyundai_contest.model.Gear
@@ -55,7 +57,7 @@ fun AppScreen(app: CoachApp) {
     val db = app.db
     val recorder = app.recorder
     val version by db.version.collectAsState()
-    val car by recorder.source.state.collectAsState()
+    val car by recorder.car.collectAsState()
     val unsupported by recorder.source.unsupported.collectAsState()
     val liveRecords by recorder.liveRecords.collectAsState()
     val tripId by recorder.currentTripId.collectAsState()
@@ -99,7 +101,7 @@ fun AppScreen(app: CoachApp) {
             } else {
                 Box(Modifier.fillMaxSize()) {
                     when (tab) {
-                        Tab.TRIPS -> TripsScreen(trips, records, onSpeak = recorder::speak)
+                        Tab.TRIPS -> TripsScreen(trips, records)
                         Tab.GROWTH -> GrowthScreen(records, unsupported, nowMs)
                         Tab.PLACES -> PlacesScreen(trips, records)
                     }
@@ -137,33 +139,35 @@ fun BigButton(label: String, modifier: Modifier = Modifier, selected: Boolean = 
 }
 
 /**
- * One coaching line, big, on the right; the car's state as a thin strip above it. Nothing here is
- * tappable: it is for a glance at a red light or while parking. While the car moves the platform
- * hides app screens, so coaching on the road is the spoken line only.
+ * The screen that stays up while the car moves, so it is glance-only: nothing to tap, a few large words.
+ * A new coaching line takes the big card for a few seconds, then joins the short list on the left and the
+ * card goes quiet again; a stale "turn your signal off" must not sit there for the rest of the drive.
  */
 @Composable
 fun DrivingScreen(car: CarState, records: List<Record>) {
-    val newest = records.lastOrNull()
+    // Only a record that arrives while this screen is up is news; coming back from P must not replay an old one.
+    val atEntry = remember { records.lastOrNull() }
+    var fresh by remember { mutableStateOf(false) }
+    LaunchedEffect(records.size) {
+        if (records.isNotEmpty() && records.last() !== atEntry) { fresh = true; delay(FRESH_MS); fresh = false }
+    }
+    val newest = records.lastOrNull().takeIf { fresh }
+    val summary = remember(records) { Coach.summarize(records) }
     Row(Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         // The car's side-camera view pops up over the top-left whenever a turn signal is on, so the left
         // column keeps its top empty and stacks this trip's tally and the last few items from the bottom.
         Column(Modifier.weight(CAMERA_SIDE).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom)) {
-            records.dropLast(1).takeLast(3).forEach { r ->
+            (if (newest != null) records.dropLast(1) else records).takeLast(3).forEach { r ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(markGlyph(r.type), Modifier.width(32.dp), color = markColor(r.type), fontSize = Type.title, fontWeight = FontWeight.Bold)
                     Text(Labels.name(r.type), color = Ink.secondary, fontSize = Type.body, maxLines = 1)
                 }
             }
-            if (records.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth().background(Ink.raised, RoundedCornerShape(16.dp)).padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("이번 주행", Modifier.weight(1f), color = Ink.secondary, fontSize = Type.body)
-                    Text("✓ ${records.count { it.type == RecordType.TURN_OK }}", color = Ink.ok, fontSize = Type.display, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(24.dp))
-                    Text("! ${records.count { it.type in Labels.MISSES }}", color = Ink.record, fontSize = Type.display, fontWeight = FontWeight.Bold)
-                }
+            val misses = records.count { it.type in Labels.MISSES }
+            Row(Modifier.fillMaxWidth().background(Ink.raised, RoundedCornerShape(16.dp)).padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Tally("깜빡이", if (summary.turns == 0) "–" else "${summary.signaled}/${summary.turns}", if (summary.turns == 0) Ink.muted else Ink.ok)
+                Tally("놓친 조작", "$misses", if (misses == 0) Ink.muted else Ink.record)
+                Tally("주차", summary.parkShifts.lastOrNull()?.let { "${it}번" } ?: "–", if (summary.parkShifts.isEmpty()) Ink.muted else Ink.primary)
             }
         }
         Column(Modifier.weight(1f - CAMERA_SIDE).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -195,24 +199,45 @@ fun DrivingScreen(car: CarState, records: List<Record>) {
 /** Share of the app width the car's side-camera pop-up covers on the Pleos emulator (measured ~45%). */
 private const val CAMERA_SIDE = 0.46f
 
-/** Gear, turn signal and wheel in one line; an open window or door shows up only while it is open. */
+/** How long a new coaching line owns the big card: long enough for two glances. */
+private const val FRESH_MS = 8_000L
+
+/** One labelled number of this trip's running tally. */
+@Composable
+private fun RowScope.Tally(label: String, value: String, color: Color) {
+    Column(Modifier.weight(1f)) {
+        Text(label, color = Ink.secondary, fontSize = Type.caption, maxLines = 1)
+        Text(value, color = color, fontSize = Type.display, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+/** What the coach is watching, in one line: gear, turn signal, speed, wheel. Anything left open or on shows up as a chip. */
 @Composable
 private fun StatusStrip(car: CarState) {
     val open = car.windowsOpenPct.filterValues { it > 0 }.keys.sortedBy { it.ordinal }
     Row(
         Modifier.fillMaxWidth().height(TOUCH + 8.dp).background(Ink.raised, RoundedCornerShape(16.dp)).padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text(
             when (car.gear) { Gear.PARK -> "P"; Gear.DRIVE -> "D"; Gear.REVERSE -> "R"; Gear.NEUTRAL -> "N"; Gear.UNKNOWN -> "-" },
             color = Ink.primary, fontSize = Type.display, fontWeight = FontWeight.Bold,
         )
-        Text(
-            when (car.turnSignal) { Side.LEFT -> "◀ 왼쪽"; Side.RIGHT -> "오른쪽 ▶"; null -> "깜빡이 꺼짐" },
-            color = if (car.turnSignal != null) Ink.signal else Ink.muted, fontSize = Type.title, fontWeight = FontWeight.Bold, maxLines = 1,
-        )
-        car.steeringDeg?.let { Text("핸들 %.0f°".format(it), color = Ink.muted, fontSize = Type.body, maxLines = 1) }
+        // Both arrows are always there, like the cluster lamps: the lit one is the signal.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("◀", color = if (car.turnSignal == Side.LEFT) Ink.signal else Ink.line, fontSize = Type.title)
+            Text("▶", color = if (car.turnSignal == Side.RIGHT) Ink.signal else Ink.line, fontSize = Type.title)
+        }
+        car.speedKph?.let {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("%.0f".format(it), color = Ink.primary, fontSize = Type.title, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(" km/h", color = Ink.muted, fontSize = Type.caption, maxLines = 1)
+            }
+        }
+        car.steeringDeg?.let { Text("핸들 %.0f°".format(it), color = Ink.muted, fontSize = Type.caption, maxLines = 1) }
         Spacer(Modifier.weight(1f))
+        if (car.beltBuckled == false) WarnChip("벨트")
+        if (car.highBeamOn) WarnChip("상향등")
         if (open.isNotEmpty()) WarnChip(open.joinToString(", ") { Announcements.seatName(it) } + " 창문")
         if (car.doorsOpen.isNotEmpty()) WarnChip("문 열림")
     }

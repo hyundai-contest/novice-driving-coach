@@ -30,6 +30,8 @@ object SyntheticHistory {
 
     private fun place(name: String) = Places.DEMO.single { it.name == name }
 
+    private val TURNS = setOf(RecordType.TURN_OK, RecordType.TURN_LATE_SIGNAL, RecordType.TURN_NO_SIGNAL)
+
     fun generate(seed: Long = 26L, endMs: Long, weeks: Int = 12): List<GenTrip> {
         val rnd = Random(seed)
         val zone = ZoneId.systemDefault()
@@ -70,7 +72,7 @@ object SyntheticHistory {
         val path = interpolate(route, 20)
         fun at(fraction: Double) = start + ((end - start) * fraction).toLong()
         fun point(fraction: Double) = path[((path.size - 1) * fraction).toInt()]
-        fun side() = if (rnd.nextBoolean()) "LEFT" else "RIGHT"
+        fun side(r: Random = rnd) = if (r.nextBoolean()) "LEFT" else "RIGHT"
 
         val records = mutableListOf<Record>()
 
@@ -119,6 +121,34 @@ object SyntheticHistory {
         }
         if (skill < 0.3 && rnd.nextDouble() < 0.04) {
             records += Record(RecordType.EXIT_NOT_PARKED, end - 8_000, route.last().lat, route.last().lng, mapOf("gear" to "DRIVE"))
+        }
+
+        // Speed, lights and setting off draw from their own generator, so the records above stay exactly as they were.
+        val more = Random(start)
+        val dest = route.last()
+        // Every turn carries the speed it was taken at, as the engine records it; a fast one also gets its own record.
+        for (i in records.indices) {
+            val turn = records[i]
+            if (turn.type !in TURNS) continue
+            val fast = more.nextDouble() < lerp(0.12, 0.01, skill)
+            val kph = (if (fast) more.nextInt(30, 39) else more.nextInt(14, 28)).toString()
+            records[i] = turn.copy(detail = turn.detail + ("kph" to kph))
+            if (fast) records += Record(RecordType.TURN_FAST, turn.atMs, turn.lat, turn.lng, mapOf("side" to turn.detail.getValue("side"), "kph" to kph))
+        }
+        if (more.nextDouble() < lerp(0.30, 0.03, skill)) {
+            records += Record(RecordType.REVERSE_FAST, end - 20_000, dest.lat, dest.lng, mapOf("kph" to more.nextInt(7, 12).toString()))
+        }
+        if (more.nextDouble() < lerp(0.40, 0.04, skill)) {
+            val i = records.indexOfFirst { it.type == RecordType.PARKING }
+            records[i] = records[i].copy(detail = records[i].detail + ("rollingShifts" to "1"))
+        }
+        if (more.nextDouble() < lerp(0.20, 0.01, skill)) {
+            records += Record(RecordType.DEPART_UNREADY, start + 20_000, path.first().first, path.first().second, mapOf("belt" to "false", "doors" to ""))
+        }
+        if (hours.first >= 18 && more.nextDouble() < lerp(0.25, 0.03, skill)) {
+            val f = more.nextDouble(0.2, 0.8)
+            val (lat, lng) = point(f)
+            records += Record(RecordType.HIGH_BEAM_LEFT_ON, at(f), lat, lng, mapOf("heldMs" to more.nextLong(30_000, 120_000).toString()))
         }
         return GenTrip(start, end, path, records.sortedBy { it.atMs })
     }

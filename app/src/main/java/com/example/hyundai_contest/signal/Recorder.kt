@@ -39,10 +39,12 @@ class Recorder(
     val liveRecords: StateFlow<List<Record>> = _liveRecords
     private val _livePath = MutableStateFlow<List<Pair<Double, Double>>>(emptyList())
 
-    private var started = false
+    private val _car = MutableStateFlow(CarState())
 
-    /** Reads a coaching line aloud on request, so a parked driver does not have to read the screen. */
-    fun speak(text: String) = announcer.say(text)
+    /** The state the engine just judged (stale speed already dropped), for the screen. Changes only when the car does. */
+    val car: StateFlow<CarState> = _car
+
+    private var started = false
 
     fun start() {
         if (started) return
@@ -63,6 +65,7 @@ class Recorder(
     private var lastLogged: CarState? = null
 
     private fun handle(s: CarState) {
+        _car.value = s.copy(atMs = 0)
         if (lastLogged?.copy(atMs = 0, lat = null, lng = null) != s.copy(atMs = 0, lat = null, lng = null)) {
             Log.d(TAG, "state ${s.gear} kph=${s.speedKph} steer=${s.steeringDeg} signal=${s.turnSignal} doors=${s.doorsOpen} windows=${s.windowsOpenPct}")
             lastLogged = s

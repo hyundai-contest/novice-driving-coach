@@ -4,6 +4,7 @@ plugins {
 }
 
 android {
+    useLibrary("android.car") // CarPropertyManager: vehicle speed
     namespace = "com.example.hyundai_contest"
     compileSdk {
         version = release(37)

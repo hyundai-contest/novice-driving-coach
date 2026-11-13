@@ -8,6 +8,7 @@ import com.example.hyundai_contest.model.RecordType
 import com.example.hyundai_contest.model.Seat
 import com.example.hyundai_contest.model.Side
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Turns a time-ordered stream of [CarState] into trip boundaries and records.
@@ -38,6 +39,14 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
     private var parkReversals = 0
     private var parkSteerSign = 0
     private var parkDriveSinceMs: Long? = null
+    private var parkRollingShifts = 0
+
+    // speed, lights, setting off
+    private var turnPeakKph: Float? = null
+    private var reverseFastRecorded = false
+    private var highBeamSinceMs: Long? = null
+    private var highBeamRecorded = false
+    private var departChecked = false
 
     fun onState(s: CarState): List<EngineEvent> {
         val out = mutableListOf<EngineEvent>()
@@ -47,12 +56,16 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
         val wasParked = p == null || p.gear == Gear.PARK || p.gear == Gear.UNKNOWN
         if (!inTrip && s.gear != Gear.PARK && s.gear != Gear.UNKNOWN && wasParked) {
             inTrip = true
+            departChecked = false
             out += EngineEvent.TripStarted(s.atMs, s.lat, s.lng)
         }
         if (p == null) return out // a single state carries no history to judge
 
         if (inTrip) {
+            detectDeparture(s, out)
             detectSignalLeftOn(s, out)
+            detectHighBeamLeftOn(s, out)
+            detectReverseFast(s, out)
             detectParking(p, s, out)
             detectTurn(s, out)
         }
@@ -114,6 +127,49 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
         }
     }
 
+    /** Once per trip, the first time the car is really moving: belt on, doors shut? Needs a real speed: shifting into D is not moving off. */
+    private fun detectDeparture(s: CarState, out: MutableList<EngineEvent>) {
+        if (departChecked || (s.speedKph ?: 0f) < config.departMinKph) return
+        departChecked = true
+        val unbuckled = s.beltBuckled == false
+        val doors = s.doorsOpen.sortedBy { it.ordinal }
+        if (!unbuckled && doors.isEmpty()) return
+        out += EngineEvent.NewRecord(
+            Record(
+                RecordType.DEPART_UNREADY, s.atMs, s.lat, s.lng,
+                mapOf("belt" to (!unbuckled).toString(), "doors" to doors.joinToString(",") { it.name }),
+            ),
+            Announcements.departDoors(doors),
+        )
+    }
+
+    private fun detectHighBeamLeftOn(s: CarState, out: MutableList<EngineEvent>) {
+        if (!s.highBeamOn) { highBeamSinceMs = null; highBeamRecorded = false; return }
+        if (!moving(s, config.highBeamMinKph)) { highBeamSinceMs = null; return }
+        val since = highBeamSinceMs ?: s.atMs.also { highBeamSinceMs = it }
+        if (!highBeamRecorded && s.atMs - since >= config.highBeamHoldMs) {
+            highBeamRecorded = true
+            out += EngineEvent.NewRecord(
+                Record(RecordType.HIGH_BEAM_LEFT_ON, s.atMs, s.lat, s.lng, mapOf("heldMs" to (s.atMs - since).toString())),
+                Announcements.HIGH_BEAM_LEFT_ON,
+            )
+        }
+    }
+
+    /** Once per time in R. Needs a real speed: with none, nothing is recorded. */
+    private fun detectReverseFast(s: CarState, out: MutableList<EngineEvent>) {
+        if (s.gear != Gear.REVERSE) { reverseFastRecorded = false; return }
+        val kph = s.speedKph ?: return
+        if (reverseFastRecorded || kph < config.reverseFastKph) return
+        reverseFastRecorded = true
+        out += EngineEvent.NewRecord(
+            Record(RecordType.REVERSE_FAST, s.atMs, s.lat, s.lng, mapOf("kph" to kph.roundToInt().toString())),
+            Announcements.REVERSE_FAST,
+        )
+    }
+
+    private fun rolling(s: CarState) = (s.speedKph ?: 0f) >= config.rollingShiftKph
+
     /**
      * A manoeuvre opens on the shift from D (or N) into R and closes on P. It counts shifts into D or R
      * (a clean reverse park is 1) and steering reversals. Driving off instead of parking discards it.
@@ -129,10 +185,14 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
                 parkReversals = 0
                 parkSteerSign = steerSign(s)
                 parkDriveSinceMs = null
+                parkRollingShifts = if (rolling(s)) 1 else 0
             }
             return
         }
-        if (s.gear != p.gear && (s.gear == Gear.DRIVE || s.gear == Gear.REVERSE)) parkShifts++
+        if (s.gear != p.gear && (s.gear == Gear.DRIVE || s.gear == Gear.REVERSE)) {
+            parkShifts++
+            if (rolling(s)) parkRollingShifts++
+        }
         val sign = steerSign(s)
         if (sign != 0) {
             if (parkSteerSign != 0 && sign != parkSteerSign) parkReversals++
@@ -147,6 +207,7 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
                         mapOf(
                             "shifts" to parkShifts.toString(),
                             "steerReversals" to parkReversals.toString(),
+                            "rollingShifts" to parkRollingShifts.toString(),
                             "durationMs" to (s.atMs - start).toString(),
                         ),
                     ),
@@ -191,6 +252,7 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
                 turnLng = s.lng
                 turnConfirmed = false
                 turnIgnored = false
+                turnPeakKph = s.speedKph
             }
             return
         }
@@ -199,8 +261,11 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
             turnStartMs = null
             return
         }
+        // Only while the wheel is still turned: speeding up once the car is straight again is not a fast turn.
+        s.speedKph?.let { kph -> turnPeakKph = maxOf(turnPeakKph ?: kph, kph) }
         if (!turnConfirmed && !turnIgnored && s.atMs - start >= config.turnConfirmMs) {
-            val speedOk = s.speedKph?.let { it >= config.turnMinKph && it <= config.turnMaxKph } ?: true
+            // Only a lower bound: crawling with the wheel wound over is manoeuvring, but there is no speed too high to be a turn.
+            val speedOk = s.speedKph?.let { it >= config.turnMinKph } ?: true
             if (speedOk) turnConfirmed = true else turnIgnored = true
         }
     }
@@ -210,6 +275,8 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
         val firstOn = if (signalAt(windowStart) == turnSide) windowStart
         else signalHistory.firstOrNull { it.first in windowStart..s.atMs && it.second == turnSide }?.first
         val detail = mutableMapOf("side" to turnSide.name)
+        val peak = turnPeakKph
+        if (peak != null) detail["kph"] = peak.roundToInt().toString()
         val type = when {
             firstOn == null -> RecordType.TURN_NO_SIGNAL
             firstOn > start - config.turnLateMs -> {
@@ -219,6 +286,10 @@ class DetectionEngine(private val config: DetectorConfig = DetectorConfig()) {
             else -> RecordType.TURN_OK
         }
         out += EngineEvent.NewRecord(Record(type, start, turnLat, turnLng, detail), null)
+        // After the signal verdict: the newest record is the one the driving screen shows large.
+        if (peak != null && peak >= config.turnFastKph) {
+            out += EngineEvent.NewRecord(Record(RecordType.TURN_FAST, start, turnLat, turnLng, mapOf("side" to turnSide.name, "kph" to peak.roundToInt().toString())), null)
+        }
     }
 
     private fun detectLeftOpenOnExit(s: CarState, out: MutableList<EngineEvent>) {

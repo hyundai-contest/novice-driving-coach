@@ -7,6 +7,8 @@
     <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
     <uses-permission android:name="pleos.car.permission.CAR_WINDOWS" />
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
+    <uses-permission android:name="android.car.permission.CAR_SPEED" />
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
@@ -26,7 +28,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true">
-            <!-- The driving screen is a single status line; coaching while moving is voice only (AAOS driver-distraction rules). -->
+            <!-- Stays visible while the car moves, so the driving screen is glance-only: a few large words, nothing to tap. -->
             <meta-data android:name="distractionOptimized" android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

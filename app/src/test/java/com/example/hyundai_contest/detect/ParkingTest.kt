@@ -43,8 +43,8 @@ class ParkingTest {
     @Test fun fullLockSteeringWhileParkingIsNotJudgedAsATurn() {
         val ev = drive(
             parked, g(1, Gear.DRIVE, kph = 10f),
-            g(5, Gear.REVERSE, steer = -200f, kph = 10f), g(7, Gear.REVERSE, steer = -200f, kph = 10f),
-            g(9, Gear.REVERSE, kph = 10f), g(10, Gear.PARK, kph = 0f),
+            g(5, Gear.REVERSE, steer = -200f, kph = 5f), g(7, Gear.REVERSE, steer = -200f, kph = 5f),
+            g(9, Gear.REVERSE, kph = 5f), g(10, Gear.PARK, kph = 0f),
         )
         assertEquals(listOf(RecordType.PARKING), records(ev).map { it.record.type })
     }

@@ -12,18 +12,20 @@ import com.example.hyundai_contest.ui.CoachTheme
 class MainActivity : ComponentActivity() {
     private val app get() = application as CoachApp
 
-    private val askLocation = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        // Start either way: without location the coaching still works, places just stay empty.
+    private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        // Start either way: without location places stay empty, without car speed the app falls back to GPS speed.
         CoachService.start(this)
+        app.recorder.source.connectCarSpeed()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            CoachService.start(this)
-        } else {
-            askLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        val missing = PERMISSIONS.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) CoachService.start(this) else askPermissions.launch(missing.toTypedArray())
         setContent { CoachTheme { AppScreen(app) } }
+    }
+
+    private companion object {
+        val PERMISSIONS = listOf(Manifest.permission.ACCESS_FINE_LOCATION, "android.car.permission.CAR_SPEED")
     }
 }
